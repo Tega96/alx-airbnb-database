@@ -1,1 +1,1 @@
-![Data Normalization](normalized_database)
+![Data Normalization](normalized_database.png)
