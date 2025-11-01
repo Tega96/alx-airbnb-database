@@ -1,4 +1,4 @@
-/** Write SQL queries to define the database schema (create tables, set constraints). */
+/** Write SQL queries to define the database schema (create tables, set constraints). 
 
 -- Create the database
 CREATE DATABASE airbnb_booking_system;
@@ -66,6 +66,10 @@ CREATE TABLE property(
         REFERENCES location(location_id)
         ON DELETE RESTRICT,
 ) 
+*/
+
+
+
 
 -- User table (core entity, role-agnostic)
 CREATE TABLE user (
@@ -147,4 +151,67 @@ CREATE TABLE booking (
     INDEX idx_booking_created_at (created_at)
 );
 
--- 
+-- Payment table with 1:1 relationship to booking
+CREATE TABLE payment (
+    payment_id UUID PRIMARY KEY DEFAULT UUID(),
+    booking_id UUID NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL CHECK (amount >= 0),
+    payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    payment_method ENUM('credit_card', 'paypal', 'stripe') NOT NULL,
+    payment_status ENUM('pending', 'completed', 'failed', 'refunded') NOT NULL DEFAULT 'pending',
+    transaction_id VARCHAR(255) UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (booking_id) REFERENCES booking(booking_id) ON DELETE CASCADE,
+    INDEX idx_payment_booking_id (booking_id),
+    INDEX idx payment_status (payment_status),
+    INDEX idx_payment_date (payment_date), 
+    INDEX idx_payment_transaction (transaction_id)
+);
+
+-- Review table with booking reference
+CREATE TABLE review (
+    review_id UUID PRIMARY KEY DEFAULT UUID(),
+    property_id UUID NOT NULL,
+    guest_id UUID NOT NULL,
+    booking_id UUID NOT NULL,
+    rating INTEGER NOT NULL CHECK (rating >=1 AND rating <= 5),
+    comment TEXT NOT NULL,
+    host_response TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (property_id) REFERENCES property(property_id) ON DELETE CASCADE,
+    FOREIGN KEY (guest_id) REFERENCES user(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (booking_id) REFERENCES booking(booking_id) ON DELETE CASCADE,
+    UNIQUE KEY uique_booking_review (booking_id), -- One review per booking
+    INDEX idx_review_property_id (property_id),
+    INDEX idx_review_guest_id (guest_id),
+    INDEX idx_review_rating (rating),
+    INDEX idx_review_created_at (created_at)
+);
+
+--Message table
+CREATE TABLE message (
+    message_id UUID PRIMARY KEY DEFAULT UUID(),
+    sender_id UUID NOT NULL,
+    recipient_id UUID NOT NULL, 
+    booking_id UUID NOT NULL,
+    message_body TEXT NOT NULL, 
+    is_read BOOLEAN DEFAULT FALSE,
+    send_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    read_at TIMESTAMP NULL,
+    FOREIGN KEY (sender_id) REFERENCES user(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (recipient_id) REFERENCES user(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (booking_id) REFERENCES booking(booking_id) ON DELETE SET NULL,
+    INDEX idx_message_sender_id (sender_id),
+    INDEX idx_message_recipient_id (recipient_id),
+    INDEX idx_message_booking_id (booking_id),
+    INDEX idx_message_sent_at (sent_at),
+    INDEX idx_message_read_status (is_read)
+);
+
+-- Additional composit indexes for common query patterns
+CREATE INDEX idx_booking_dates_status ON booking (start_date, end_date, status);
+CREATE INDEX idx_property_host_active ON property (host_id, is_active);
+CREATE INDEX idx_review_property_rating ON review (property_id, rating);
+CREATE INDEX idx_message_conversation ON message (LEAST(sender_id, recipient_id), GREATEST(sender_id, recipient_id), sent_at);
+CREATE INDEX idx_price_history_property_effective ON property_price_history (property_id, effective_from, effective_to);
